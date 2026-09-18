@@ -1,0 +1,24 @@
+#Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+#Datasets
+datasets/
+artifacts/
+
+#Checkpoints
+checkpoints/
+*.pth
+*.pt
+
+#Experiment caches
+cache/
+wandb/
+
+#macOS
+.DS_Store
+
+#Jupyter
+.ipynb_checkpoints/
