@@ -154,7 +154,7 @@ def cdan_train(
     list(backbone.parameters())
     + list(classifier.parameters())
     + list(discriminator.parameters()),
-    max_norm=5.0
+    max_norm=1.0
 )
     optimizer.step()
 
