@@ -222,3 +222,21 @@ def make_source_loaders(pacs_root="datasets/PACS/kfold", split_path="splits/pacs
         )
 
     return source_train_loaders, source_val_loaders
+
+def make_target_eval_loader(pacs_root="datasets/PACS/kfold"):
+    eval_transform= get_eval_transform()
+
+    target_dataset= PACSDomain(
+        root=pacs_root,
+        domain=TARGET_DOMAIN,
+        transform=eval_transform,
+    )
+
+    target_loader= DataLoader(
+        target_dataset,
+        batch_size=64,
+        shuffle=False,
+        num_workers=2,
+    )
+
+    return target_loader

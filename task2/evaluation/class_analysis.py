@@ -51,12 +51,17 @@ def class_analysis(backbone,classifier,target_loader,class_names,device):
         row = matrix[class_id].copy()
         row[class_id] = 0
 
-        confused_with = row.argmax()
-        count = row[confused_with]
+        if row.max() > 0:
+            confused_with= row.argmax()
+            
+            confusions[class_name]= {
+        "predicted_as": class_names[confused_with],
+        "count": int(row[confused_with])
+         }
 
-        confusions[class_name] = {
-            "predicted_as": class_names[confused_with],
-            "count": int(count)
+        else:
+            confusions[class_name]= {"predicted_as": None,
+        "count": 0
         }
 
     return {
