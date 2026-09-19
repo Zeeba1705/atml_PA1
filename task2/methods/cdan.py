@@ -150,6 +150,12 @@ def cdan_train(
     total_loss = (cls_loss+ domain_loss)
 
     total_loss.backward()
+    torch.nn.utils.clip_grad_norm_(
+    list(backbone.parameters())
+    + list(classifier.parameters())
+    + list(discriminator.parameters()),
+    max_norm=5.0
+)
     optimizer.step()
 
     return (total_loss.item(),cls_loss.item(),domain_loss.item(),domain_acc.item(),feature_var.item())
