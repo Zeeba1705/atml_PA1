@@ -9,6 +9,7 @@ from task2.models.backbone import ResNetBackbone
 from task2.models.classifier_head import ClassifierHead
 from task2.methods.source_only import src_train
 from task2.evaluation.metrics import evaluate_model
+from task2.methods.dan import dan_train
 
 SEED=6304
 
@@ -27,6 +28,11 @@ def main(args):
     print("Using device:", device)
 
     os.makedirs(args.output_dir, exist_ok=True)
+
+    if args.method == "dan":
+        run_name = f"dan_lambda_{args.lambda_mmd}"
+    else:
+        run_name = args.method
 
     source_train, source_val, target_train, target_eval = make_pacs_loaders(
         pacs_root=args.pacs_root
@@ -54,28 +60,62 @@ def main(args):
         for domain in SOURCE_DOMAINS:
             source_iters[domain] = iter(source_train[domain])
 
+        if args.method=="dan":
+            target_iter=iter(target_train)
+
         num_steps = max(
             len(source_train[d])
             for d in SOURCE_DOMAINS
         )
 
-        losses = []
+        losses= []
+        cls_losses=[]
+        alignment_losses=[]
 
         for _ in range(num_steps):
+            if args.method=="source_only":
 
-            batch_loss = src_train(
-                backbone=backbone,
-                classifier=classifier,
-                src_iter=source_iters,
-                src_loader=source_train,
-                optimizer=optimizer,
-                criterion=criterion,
-                device=device
-            )
+                batch_loss= src_train(
+                    backbone=backbone,
+                    classifier=classifier,
+                    src_iter=source_iters,
+                    src_loader=source_train,
+                    optimizer=optimizer,
+                    criterion=criterion,
+                    device=device
+                )
 
-            losses.append(batch_loss)
+                losses.append(batch_loss)
+
+            elif args.method=="dan":
+                try:
+                    target_imgs, _ = next(target_iter)
+                except StopIteration:
+                    target_iter = iter(target_train)
+                    target_imgs, _ = next(target_iter)
+
+                total_loss, cls_loss, alignment_loss = dan_train(
+                    backbone=backbone,
+                    classifier=classifier,
+                    src_iter=source_iters,
+                    src_loader=source_train,
+                    target_imgs=target_imgs,
+                    optimizer=optimizer,
+                    criterion=criterion,
+                    device=device,
+                    lambda_mmd=args.lambda_mmd
+                )
+
+                losses.append(total_loss)
+                cls_losses.append(cls_loss)
+                alignment_losses.append(alignment_loss)
+
 
         train_loss = sum(losses) / len(losses)
+
+        if args.method == "dan":
+            avg_cls_loss = sum(cls_losses) / len(cls_losses)
+            avg_alignment_loss = sum(alignment_losses) / len(alignment_losses)
 
         source_scores = {}
 
@@ -98,6 +138,9 @@ def main(args):
         mean_f1 = sum(f1_scores) / len(f1_scores)
 
         print("average train loss:", round(train_loss, 4))
+        if args.method == "dan":
+            print("classification loss:", round(avg_cls_loss, 4))
+            print("MMD loss:", round(avg_alignment_loss, 4))
 
         for domain in SOURCE_DOMAINS:
             acc = source_scores[domain]["accuracy"]
@@ -117,6 +160,9 @@ def main(args):
             "mean_source_f1": mean_f1,
             "source_validation": source_scores
         }
+        if args.method == "dan":
+            epoch_info["classification_loss"] = avg_cls_loss
+            epoch_info["mmd_loss"] = avg_alignment_loss
 
         history.append(epoch_info)
 
@@ -129,7 +175,7 @@ def main(args):
 
             save_path = os.path.join(
                 args.output_dir,
-                "source_only_best.pt"
+                f"{run_name}_best.pt"
             )
 
             torch.save(
@@ -155,7 +201,7 @@ def main(args):
 
         history_path = os.path.join(
             args.output_dir,
-            "source_only_history.json"
+            f"{run_name}_history.json"
         )
 
         with open(history_path, "w") as f:
@@ -178,6 +224,19 @@ if __name__ == "__main__":
         "--output_dir",
         type=str,
         default="task2/results"
+    )
+
+    parser.add_argument(
+    "--method",
+    type=str,
+    choices=["source_only", "dan"],
+    default="source_only"
+)
+
+    parser.add_argument(
+        "--lambda_mmd",
+        type=float,
+        default=1.0
     )
 
     args = parser.parse_args()
