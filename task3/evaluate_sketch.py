@@ -30,10 +30,7 @@ def load_model(checkpoint_path,device):
     backbone= ResNetBackbone().to(device)
     classifier= ClassifierHead().to(device)
 
-    checkpoint= torch.load(
-        checkpoint_path,
-        map_location=device
-    )
+    checkpoint= torch.load(checkpoint_path, map_location=device)
 
     backbone.load_state_dict(checkpoint["backbone"])
     classifier.load_state_dict(checkpoint["classifier"])
