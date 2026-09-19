@@ -99,8 +99,7 @@ def main(args):
         feature_vars = []
 
         for step in range(num_steps):
-            if step >= 20:
-                break
+            
             if args.method=="source_only":
 
                 batch_loss= src_train(
