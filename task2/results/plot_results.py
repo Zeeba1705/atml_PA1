@@ -27,7 +27,6 @@ def get_value(row, possible_keys):
 
     return None
 
-
 def plot_classification_loss(checkpoint_dir, output_dir):
     files = {
         "Source-only": "source_only_history.json",
@@ -46,7 +45,7 @@ def plot_classification_loss(checkpoint_dir, output_dir):
         losses = []
 
         for i, row in enumerate(history):
-            loss = get_value(row, ["classification_loss", "class_loss", "cls_loss"])
+            loss = get_value(row, ["classification_loss", "class_loss", "cls_loss", "train_loss"])
 
             if loss is not None:
                 epoch = row.get("epoch", i + 1)
@@ -59,6 +58,7 @@ def plot_classification_loss(checkpoint_dir, output_dir):
     plt.xlabel("Epoch")
     plt.ylabel("Classification loss")
     plt.title("Task 2 Classification Loss")
+    plt.yscale("log")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
@@ -68,7 +68,6 @@ def plot_classification_loss(checkpoint_dir, output_dir):
     plt.close()
 
     print("Saved:", output_path)
-
 
 def plot_alignment_losses(checkpoint_dir, output_dir):
     files = {
@@ -100,6 +99,7 @@ def plot_alignment_losses(checkpoint_dir, output_dir):
     plt.xlabel("Epoch")
     plt.ylabel("Alignment / domain loss")
     plt.title("Task 2 Alignment Losses")
+    plt.yscale("log")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
