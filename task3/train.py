@@ -156,6 +156,116 @@ def train_dan_dg(args,source_train,source_val,device):
     print("Saved checkpoint:", checkpoint_path)
     print("Saved history:", history_path)
 
+def train_sam(args,source_train,source_val,device):
+    backbone= ResNetBackbone().to(device)
+    classifier= ClassifierHead().to(device)
+
+    optimizer= torch.optim.AdamW(
+        list(backbone.parameters()) + list(classifier.parameters()),
+        lr=1e-4,
+        weight_decay=1e-4
+    )
+
+    best_f1= -1
+    patience_count= 0
+    history= []
+
+    num_steps= max(len(source_train[d]) for d in SOURCE_DOMAINS)
+
+    run_name= f"sam_rho_{args.rho}"
+
+    checkpoint_path= os.path.join(args.output_dir,f"{run_name}_best.pt")
+    history_path= os.path.join(args.output_dir,f"{run_name}_history.json")
+
+    for epoch in range(30):
+        print(f"\n--- Epoch {epoch + 1} ---")
+
+        iterators= {domain: iter(source_train[domain]) for domain in SOURCE_DOMAINS}
+
+        first_loss_sum= 0
+        second_loss_sum= 0
+
+        for step in range(num_steps):
+            batches= {}
+
+            for domain in SOURCE_DOMAINS:
+                batch, iterators[domain]= next_load(source_train[domain],iterators[domain])
+                batches[domain]= batch
+
+            first_loss, second_loss= sam_train(
+                backbone,
+                classifier,
+                batches,
+                optimizer,
+                device,
+                rho=args.rho
+            )
+
+            first_loss_sum+= first_loss
+            second_loss_sum+= second_loss
+
+        average_first_loss= first_loss_sum / num_steps
+        average_second_loss= second_loss_sum / num_steps
+
+        print("train loss:", round(average_first_loss,4))
+        print("perturbed loss:", round(average_second_loss,4))
+
+        source_results= {}
+
+        for domain in SOURCE_DOMAINS:
+            scores= evaluate_model(backbone,classifier,source_val[domain],device)
+            source_results[domain]= scores
+
+        mean_f1= sum(source_results[d]["macro_f1"] for d in SOURCE_DOMAINS) / len(SOURCE_DOMAINS)
+
+        for domain in SOURCE_DOMAINS:
+            print(
+                f"{domain}:",
+                f"accuracy={source_results[domain]['accuracy']:.4f},",
+                f"macro_f1={source_results[domain]['macro_f1']:.4f}"
+            )
+
+        print("mean source macro F1:", round(mean_f1,4))
+
+        epoch_record= {
+            "epoch": epoch + 1,
+            "train_loss": average_first_loss,
+            "perturbed_loss": average_second_loss,
+            "source_validation": source_results,
+            "mean_source_macro_f1": mean_f1
+        }
+
+        history.append(epoch_record)
+
+        with open(history_path,"w") as f:
+            json.dump(history,f,indent=2)
+
+        if mean_f1 > best_f1:
+            best_f1= mean_f1
+            patience_count= 0
+
+            torch.save(
+                {
+                    "epoch": epoch + 1,
+                    "backbone": backbone.state_dict(),
+                    "classifier": classifier.state_dict(),
+                    "best_f1": best_f1,
+                    "rho": args.rho
+                },
+                checkpoint_path
+            )
+
+        else:
+            patience_count+= 1
+            print(f"no improvement ({patience_count}/5)")
+
+        if patience_count >= 5:
+            print("stopping early")
+            break
+
+    print("\nBest source macro F1:", round(best_f1,4))
+    print("Saved checkpoint:", checkpoint_path)
+    print("Saved history:", history_path)
 
 def main(args):
     random.seed(SEED)
@@ -181,6 +291,11 @@ def main(args):
         print("lambda_dg:", args.lambda_dg)
         train_dan_dg(args,source_train,source_val,device)
 
+    if args.method == "sam":
+        print("rho:", args.rho)
+        train_sam(args,source_train,source_val,device)
+
+
     else:
         raise ValueError("Unknown method: " + args.method)
 
@@ -190,6 +305,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--method",type=str,required=True,choices=["dan_dg"])
     parser.add_argument("--lambda_dg",type=float,default=1.0)
+    parser.add_argument("rho",type=float,default=0.05)
+
     parser.add_argument("--pacs_root",type=str,default="datasets/PACS/kfold")
     parser.add_argument("--split_path",type=str,default="splits/pacs_sketch_seed6304.json")
     parser.add_argument("--output_dir",type=str,default="task3/results")
