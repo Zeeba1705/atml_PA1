@@ -303,7 +303,7 @@ def main(args):
 if __name__ == "__main__":
     parser= argparse.ArgumentParser()
 
-    parser.add_argument("--method",type=str,required=True,choices=["dan_dg"])
+    parser.add_argument("--method",type=str,required=True,choices=["dan_dg", "sam"])
     parser.add_argument("--lambda_dg",type=float,default=1.0)
     parser.add_argument("rho",type=float,default=0.05)
 
