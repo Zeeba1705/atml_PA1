@@ -305,7 +305,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--method",type=str,required=True,choices=["dan_dg", "sam"])
     parser.add_argument("--lambda_dg",type=float,default=1.0)
-    parser.add_argument("rho",type=float,default=0.05)
+    parser.add_argument("--rho",type=float,default=0.05)
 
     parser.add_argument("--pacs_root",type=str,default="datasets/PACS/kfold")
     parser.add_argument("--split_path",type=str,default="splits/pacs_sketch_seed6304.json")
