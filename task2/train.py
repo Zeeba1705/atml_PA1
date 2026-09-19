@@ -67,7 +67,7 @@ def main(args):
                 backbone=backbone,
                 classifier=classifier,
                 src_iter=source_iters,
-                source_loaders=source_train,
+                src_loader=source_train,
                 optimizer=optimizer,
                 criterion=criterion,
                 device=device
