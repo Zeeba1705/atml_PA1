@@ -27,6 +27,9 @@ def load_model(checkpoint_path, device):
         checkpoint["classifier"]
     )
 
+    backbone.eval()
+    classifier.eval()
+
     return backbone, classifier
 
 def evaluate_checkpoint(checkpoint_path,source_val,target_eval,device):
@@ -142,12 +145,13 @@ def main(args):
        round(method_result["target"]["macro_f1"], 4), "domain sep:", round(method_result["domain_separability"],4))
 
     baseline_acc= all_results["source_only"]["target"]["accuracy"]
+
     for method in all_results:
         target_acc= all_results[method]["target"]["accuracy"]
 
         all_results[method]["target_accuracy_change"]= target_acc-baseline_acc
 
-    baseline_classes = all_results[ "source_only"]["class_analysis"]["per_class_accuracy"]
+    baseline_classes = all_results["source_only"]["class_analysis"]["per_class_accuracy"]
 
     for method in all_results:
 
@@ -177,6 +181,69 @@ def main(args):
 
     print("\nSaved final metrics to:")
     print(output_path)
+
+    controlled_checkpoints = {
+        "0.1": os.path.join(
+            args.checkpoint_dir,
+            "dan_lambda_0.1_best.pt"
+        ),
+
+        "1.0": os.path.join(
+            args.checkpoint_dir,
+            "dan_lambda_1.0_best.pt"
+        ),
+
+        "10.0": os.path.join(
+            args.checkpoint_dir,
+            "dan_lambda_10.0_best.pt"
+        ),
+    }
+
+    controlled_results = {}
+
+    print("\nControlled DAN study")
+
+    for lambda_value in controlled_checkpoints:
+        checkpoint_path= controlled_checkpoints[lambda_value]
+
+        print("\nEvaluating DAN lambda =", lambda_value)
+
+        result = evaluate_checkpoint(
+            checkpoint_path,
+            source_val,
+            target_eval,
+            device
+        )
+
+        result["lambda_mmd"]= float(lambda_value)
+
+        result["target_accuracy_change"] = (
+            result["target"]["accuracy"]
+            - baseline_acc
+        )
+
+        controlled_results[lambda_value]= result
+
+        print(
+        "lambda:", lambda_value, "source F1:", round(result["mean_source_macro_f1"], 4),
+        "target acc:", round(result["target"]["accuracy"], 4), "target f1:",
+        round(result["target"]["macro_f1"], 4), "domain sep:",
+        round(result["domain_separability"], 4))
+
+    controlled_path = os.path.join(
+        args.checkpoint_dir,
+        "dan_controlled_study.json"
+    )
+
+    with open(controlled_path, "w") as f:
+        json.dump(
+            controlled_results,
+            f,
+            indent=2
+        )
+
+    print("\nSaved controlled study to:")
+    print(controlled_path)
 
 
 if __name__ == "__main__":
