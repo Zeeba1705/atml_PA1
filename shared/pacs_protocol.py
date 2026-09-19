@@ -186,3 +186,39 @@ if __name__ == "__main__":
 
     sketch_images, _ = next(iter(target_train))
     print("sketch", sketch_images.shape)
+
+def make_source_loaders(pacs_root="datasets/PACS/kfold", split_path="splits/pacs_sketch_seed6304.json"):
+    split_data= load_source_splits(split_path)
+
+    train_transform= get_train_transform()
+    eval_transform= get_eval_transform()
+
+    source_train_loaders= {}
+    source_val_loaders= {}
+
+    for domain in SOURCE_DOMAINS:
+        train_dataset= PACSDomain(root=pacs_root,domain=domain,transform=train_transform)
+        val_dataset= PACSDomain(root=pacs_root,domain=domain,transform=eval_transform)
+
+        train_idx= split_data["splits"][domain]["train_idx"]
+        val_idx= split_data["splits"][domain]["val_idx"]
+
+        train_subset= Subset(train_dataset,train_idx)
+        val_subset= Subset(val_dataset,val_idx)
+
+        source_train_loaders[domain]= DataLoader(
+            train_subset,
+            batch_size=8,
+            shuffle=True,
+            num_workers=2,
+            drop_last=True,
+        )
+
+        source_val_loaders[domain]= DataLoader(
+            val_subset,
+            batch_size=64,
+            shuffle=False,
+            num_workers=2,
+        )
+
+    return source_train_loaders, source_val_loaders
