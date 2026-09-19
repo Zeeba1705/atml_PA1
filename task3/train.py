@@ -10,6 +10,7 @@ from task2.models.backbone import ResNetBackbone, freeze_batchnorm_stats
 from task2.models.classifier_head import ClassifierHead
 from task2.evaluation.metrics import evaluate_model
 from task3.methods.dan_dg import dan_dg_loss
+from task3.methods.sam import sam_train
 
 
 SEED= 6304
