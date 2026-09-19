@@ -14,6 +14,7 @@ import math
 
 from task2.models.domain_discriminator import DomainDiscriminator
 from task2.methods.dann import dann_train
+from task2.methods.cdan import cdan_train
 
 SEED=6304
 
@@ -47,14 +48,17 @@ def main(args):
 
     discriminator= None
 
-    if args.method=="dann":
-        discriminator=DomainDiscriminator().to(device)
+    if args.method == "dann":
+        discriminator = DomainDiscriminator(input_dim=512).to(device)
+
+    elif args.method == "cdan":
+        discriminator = DomainDiscriminator(input_dim=512 * 7).to(device)
 
     criterion= torch.nn.CrossEntropyLoss()
 
     params=(list(backbone.parameters())+ list(classifier.parameters()))
 
-    if args.method=="dann":
+    if args.method in ["dann", "cdan"]:
         params+=list(discriminator.parameters())
 
     optimizer= torch.optim.AdamW(params, lr=1e-4, weight_decay=1e-4)
@@ -74,7 +78,7 @@ def main(args):
         for domain in SOURCE_DOMAINS:
             source_iters[domain] = iter(source_train[domain])
 
-        if args.method in ["dan", "dann"]:
+        if args.method in ["dan", "dann", "cdan"]:
             target_iter=iter(target_train)
 
         num_steps= max(
@@ -160,6 +164,42 @@ def main(args):
                 domain_losses.append(domain_loss)
                 domain_accs.append(domain_acc)
                 feature_vars.append(feature_var)
+            
+            elif args.method == "cdan":
+                try:
+                    target_imgs, _ = next(target_iter)
+                except StopIteration:
+                    target_iter = iter(target_train)
+                    target_imgs, _ = next(target_iter)
+
+                total_steps = max_epoc * num_steps
+                current_step = epoch * num_steps + step
+
+                p = current_step / (total_steps - 1)
+
+                alpha = (
+                    2.0 / (1.0 + math.exp(-10 * p))
+                    - 1.0
+                )
+
+                total_loss, cls_loss, domain_loss, domain_acc, feature_var = cdan_train(
+                    backbone=backbone,
+                    classifier=classifier,
+                    discriminator=discriminator,
+                    src_iter=source_iters,
+                    src_loader=source_train,
+                    target_imgs=target_imgs,
+                    optimizer=optimizer,
+                    criterion=criterion,
+                    device=device,
+                    alpha=alpha
+                )
+
+                losses.append(total_loss)
+                cls_losses.append(cls_loss)
+                domain_losses.append(domain_loss)
+                domain_accs.append(domain_acc)
+                feature_vars.append(feature_var)
 
 
         train_loss = sum(losses) / len(losses)
@@ -168,7 +208,7 @@ def main(args):
             avg_cls_loss = sum(cls_losses) / len(cls_losses)
             avg_alignment_loss = sum(alignment_losses) / len(alignment_losses)
         
-        if args.method == "dann":
+        if args.method in ["dann", "cdan"]:
             avg_cls_loss = sum(cls_losses) / len(cls_losses)
             avg_domain_loss = sum(domain_losses) / len(domain_losses)
             avg_domain_acc = sum(domain_accs) / len(domain_accs)
@@ -199,7 +239,7 @@ def main(args):
             print("classification loss:", round(avg_cls_loss, 4))
             print("MMD loss:", round(avg_alignment_loss, 4))
         
-        if args.method == "dann":
+        if args.method in ["dann", "cdan"]:
             print("classification loss:", round(avg_cls_loss, 4))
             print("domain loss:", round(avg_domain_loss, 4))
             print("domain accuracy:", round(avg_domain_acc, 4))
@@ -229,7 +269,7 @@ def main(args):
             epoch_info["classification_loss"] = avg_cls_loss
             epoch_info["mmd_loss"] = avg_alignment_loss
 
-        if args.method == "dann":
+        if args.method in ["dann", "cdan"]:
             epoch_info["classification_loss"] = avg_cls_loss
             epoch_info["domain_loss"] = avg_domain_loss
             epoch_info["domain_accuracy"] = avg_domain_acc
@@ -258,7 +298,7 @@ def main(args):
                     "best_f1": best_f1
                 }
             
-            if args.method=="dann":
+            if args.method in ["dann", "cdan"]:
                 checkpoint["discriminator"]= discriminator.state_dict()
             
             torch.save(checkpoint, save_path)
@@ -304,7 +344,7 @@ if __name__ == "__main__":
     parser.add_argument(
     "--method",
     type=str,
-    choices=["source_only", "dan", "dann"],
+    choices=["source_only", "dan", "dann", "cdan"],
     default="source_only"
     )
 
