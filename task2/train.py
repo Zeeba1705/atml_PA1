@@ -66,7 +66,7 @@ def main(args):
             batch_loss = src_train(
                 backbone=backbone,
                 classifier=classifier,
-                source_iters=source_iters,
+                src_iter=source_iters,
                 source_loaders=source_train,
                 optimizer=optimizer,
                 criterion=criterion,
