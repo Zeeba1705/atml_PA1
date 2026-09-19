@@ -74,8 +74,14 @@ def dann_train(backbone,classifier,discriminator,src_iter,src_loader,target_imgs
         dim=0
     ).mean()
 
+    domain_feats = torch.nn.functional.normalize(
+    all_feats,
+    p=2,
+    dim=1
+)
+
     reversed_feats = grad_reverse(
-        all_feats,
+        domain_feats,
         alpha
     )
 
