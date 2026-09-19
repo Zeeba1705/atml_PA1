@@ -34,6 +34,11 @@ def main(args):
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    print("Method:", args.method)
+
+    if args.method == "dan":
+        print("lambda_mmd:", args.lambda_mmd)
+
     if args.method == "dan":
         run_name = f"dan_lambda_{args.lambda_mmd}"
     else:

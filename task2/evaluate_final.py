@@ -8,6 +8,7 @@ from task2.models.backbone import ResNetBackbone
 from task2.models.classifier_head import ClassifierHead
 from task2.evaluation.metrics import evaluate_model
 from task2.evaluation.domain_separability import domain_separability
+from task2.evaluation.class_analysis import class_analysis
 
 def load_model(checkpoint_path, device):
     backbone= ResNetBackbone().to(device)
@@ -77,6 +78,16 @@ def evaluate_checkpoint(checkpoint_path,source_val,target_eval,device):
 
     results["domain_separability"] = sep_score
 
+    class_names = target_eval.dataset.classes
+    class_results = class_analysis(
+    backbone,
+    classifier,
+    target_eval,
+    class_names,
+    device)
+
+    results["class_analysis"]= class_results
+
     return results
 
 def main(args):
@@ -135,6 +146,22 @@ def main(args):
         target_acc= all_results[method]["target"]["accuracy"]
 
         all_results[method]["target_accuracy_change"]= target_acc-baseline_acc
+
+    baseline_classes = all_results[ "source_only"]["class_analysis"]["per_class_accuracy"]
+
+    for method in all_results:
+
+        method_classes = all_results[method]["class_analysis"]["per_class_accuracy"]
+
+        class_changes = {}
+
+        for class_name in baseline_classes:
+            class_changes[class_name] = (
+                method_classes[class_name]
+                - baseline_classes[class_name]
+            )
+
+        all_results[method]["per_class_accuracy_change"]= class_changes
     
     output_path = os.path.join(
         args.checkpoint_dir,
