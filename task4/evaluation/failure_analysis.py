@@ -16,75 +16,135 @@ CIFAR10_CLASSES= [
 
 
 def per_unknown_class_analysis(logits,labels,scores,threshold,class_names):
-    predictions= logits.argmax(dim=1)
+    predictions= logits[:,:10].argmax(dim=1)
 
     results= {}
 
-    unique_labels= torch.unique(labels)
+    for label in torch.unique(labels):
+        class_id= label.item()
 
-    for label in unique_labels:
-        label_id= label.item()
         mask= labels == label
 
         class_scores= scores[mask]
         class_predictions= predictions[mask]
 
-        rejected_mask= class_scores > threshold
-        accepted_mask= class_scores <= threshold
+        rejected= class_scores > threshold
+        accepted= class_scores <= threshold
 
-        rejection_rate= rejected_mask.float().mean().item()
-        acceptance_rate= accepted_mask.float().mean().item()
-
-        all_prediction_counts= torch.bincount(
+        prediction_counts= torch.bincount(
             class_predictions,
             minlength=10
         )
 
-        most_common_all= all_prediction_counts.argmax().item()
+        most_common= prediction_counts.argmax().item()
 
-        if accepted_mask.sum().item() > 0:
-            accepted_predictions= class_predictions[accepted_mask]
+        if accepted.sum().item() > 0:
+            accepted_predictions= class_predictions[
+                accepted
+            ]
 
-            accepted_prediction_counts= torch.bincount(
+            accepted_counts= torch.bincount(
                 accepted_predictions,
                 minlength=10
             )
 
-            most_common_accepted= accepted_prediction_counts.argmax().item()
+            accepted_common= accepted_counts.argmax().item()
 
-            most_common_accepted_name= CIFAR10_CLASSES[
-                most_common_accepted
+            accepted_name= CIFAR10_CLASSES[
+                accepted_common
             ]
 
-            most_common_accepted_count= int(
-                accepted_prediction_counts[
-                    most_common_accepted
+            accepted_count= int(
+                accepted_counts[
+                    accepted_common
                 ].item()
             )
 
         else:
-            most_common_accepted_name= None
-            most_common_accepted_count= 0
+            accepted_name= None
+            accepted_count= 0
 
-        results[class_names[label_id]]= {
-            "num_examples": int(mask.sum().item()),
-
-            "rejection_rate": rejection_rate,
-            "acceptance_rate": acceptance_rate,
-
-            "most_common_prediction_all": CIFAR10_CLASSES[
-                most_common_all
-            ],
-
-            "most_common_prediction_all_count": int(
-                all_prediction_counts[
-                    most_common_all
-                ].item()
+        results[class_names[class_id]]= {
+            "num_examples":int(
+                mask.sum().item()
             ),
 
-            "most_common_prediction_accepted": most_common_accepted_name,
+            "rejection_rate":float(
+                rejected.float().mean().item()
+            ),
 
-            "most_common_prediction_accepted_count": most_common_accepted_count
+            "acceptance_rate":float(
+                accepted.float().mean().item()
+            ),
+
+            "mean_score":float(
+                class_scores.float().mean().item()
+            ),
+
+            "median_score":float(
+                class_scores.float().median().item()
+            ),
+
+            "most_common_prediction_all":
+                CIFAR10_CLASSES[most_common],
+
+            "most_common_prediction_all_count":
+                int(
+                    prediction_counts[
+                        most_common
+                    ].item()
+                ),
+
+            "most_common_prediction_accepted":
+                accepted_name,
+
+            "most_common_prediction_accepted_count":
+                accepted_count
         }
 
     return results
+
+
+def accepted_failures(logits,labels,scores,threshold,class_names,n=10):
+    predictions= logits[:,:10].argmax(dim=1)
+
+    accepted_indices= torch.where(
+        scores <= threshold
+    )[0]
+
+    accepted_scores= scores[
+        accepted_indices
+    ]
+
+    order= torch.argsort(
+        accepted_scores
+    )
+
+    accepted_indices= accepted_indices[
+        order
+    ]
+
+    failures= []
+
+    for idx in accepted_indices[:n]:
+        idx= idx.item()
+
+        failures.append({
+            "index":idx,
+            "unknown_class":
+                class_names[
+                    labels[idx].item()
+                ],
+            "predicted_known_class":
+                CIFAR10_CLASSES[
+                    predictions[idx].item()
+                ],
+            "score":float(
+                scores[idx].item()
+            ),
+            "threshold":float(
+                threshold
+            )
+        })
+
+    return failures
