@@ -93,3 +93,55 @@ def evaluate_score(val_scores,test_scores,near_scores,far_scores):
             )
         )
     }
+
+def evaluate_fixed_threshold(test_scores,near_scores,far_scores,threshold):
+    all_unknown= np.concatenate([
+        near_scores,
+        far_scores
+    ])
+
+    return {
+        "threshold":float(threshold),
+
+        "auroc_near":float(
+            compute_auroc(
+                test_scores,
+                near_scores
+            )
+        ),
+
+        "auroc_far":float(
+            compute_auroc(
+                test_scores,
+                far_scores
+            )
+        ),
+
+        "auroc_all":float(
+            compute_auroc(
+                test_scores,
+                all_unknown
+            )
+        ),
+
+        "known_acceptance":float(
+            known_acceptance_rate(
+                test_scores,
+                threshold
+            )
+        ),
+
+        "near_rejection":float(
+            unknown_rejection_rate(
+                near_scores,
+                threshold
+            )
+        ),
+
+        "far_rejection":float(
+            unknown_rejection_rate(
+                far_scores,
+                threshold
+            )
+        )
+    }

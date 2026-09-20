@@ -1,7 +1,6 @@
 import os
 import json
 import argparse
-import numpy as np
 import torch
 
 from task4.scores.scores import (
@@ -14,10 +13,18 @@ from task4.scores.scores import (
     proser_placeholder_score
 )
 
-from task4.evaluation.metrics import evaluate_score
+from task4.evaluation.metrics import (
+    evaluate_score,
+    evaluate_fixed_threshold
+)
+
 from task4.evaluation.failure_analysis import (
     per_unknown_class_analysis,
     accepted_failures
+)
+
+from task4.evaluation.closed_set_analysis import (
+    per_class_accuracy
 )
 
 
@@ -41,11 +48,15 @@ def closed_set_accuracy(outputs):
     logits= outputs["logits"][:,:10]
     labels= outputs["labels"]
 
-    predictions= logits.argmax(dim=1)
+    predictions= logits.argmax(
+        dim=1
+    )
 
-    return (
+    accuracy= (
         predictions == labels
     ).float().mean().item()
+
+    return accuracy
 
 
 def main(cache_dir,output_dir):
@@ -65,7 +76,7 @@ def main(cache_dir,output_dir):
 
 
     # =====================================
-    # VANILLA
+    # VANILLA OUTPUTS
     # =====================================
 
     vanilla_train= load_outputs(
@@ -99,12 +110,15 @@ def main(cache_dir,output_dir):
     )
 
 
+    # =====================================
+    # VANILLA POST-HOC SCORES
+    # =====================================
+
     score_functions= {
         "msp":msp_score,
         "mls":mls_score,
         "energy":energy_score
     }
-
 
     vanilla_results= {}
 
@@ -134,7 +148,9 @@ def main(cache_dir,output_dir):
             )
         )
 
-        vanilla_results[score_name]= evaluate_score(
+        vanilla_results[
+            score_name
+        ]= evaluate_score(
             val_scores,
             test_scores,
             near_scores,
@@ -142,11 +158,14 @@ def main(cache_dir,output_dir):
         )
 
 
+    # =====================================
+    # MAHALANOBIS
+    # =====================================
+
     class_means,variance= fit_mahalanobis(
         vanilla_train["features"],
         vanilla_train["labels"]
     )
-
 
     mah_val= mahalanobis_score(
         vanilla_val["features"],
@@ -172,8 +191,9 @@ def main(cache_dir,output_dir):
         variance
     )
 
-
-    vanilla_results["mahalanobis"]= evaluate_score(
+    vanilla_results[
+        "mahalanobis"
+    ]= evaluate_score(
         numpy_scores(mah_val),
         numpy_scores(mah_test),
         numpy_scores(mah_near),
@@ -186,7 +206,6 @@ def main(cache_dir,output_dir):
     # =====================================
 
     model_results= {}
-
 
     for method in [
         "vanilla",
@@ -217,33 +236,48 @@ def main(cache_dir,output_dir):
             "far"
         )
 
-
         val_logits= val["logits"][:,:10]
         test_logits= test["logits"][:,:10]
         near_logits= near["logits"][:,:10]
         far_logits= far["logits"][:,:10]
 
-
         results= evaluate_score(
             numpy_scores(
-                mls_score(val_logits)
+                mls_score(
+                    val_logits
+                )
             ),
             numpy_scores(
-                mls_score(test_logits)
+                mls_score(
+                    test_logits
+                )
             ),
             numpy_scores(
-                mls_score(near_logits)
+                mls_score(
+                    near_logits
+                )
             ),
             numpy_scores(
-                mls_score(far_logits)
+                mls_score(
+                    far_logits
+                )
             )
         )
 
-
-        results["closed_set_accuracy"]= float(
-            closed_set_accuracy(test)
+        results[
+            "closed_set_accuracy"
+        ]= float(
+            closed_set_accuracy(
+                test
+            )
         )
 
+        results[
+            "per_class_accuracy"
+        ]= per_class_accuracy(
+            test["logits"],
+            test["labels"]
+        )
 
         model_results[
             method + "_mls"
@@ -278,11 +312,9 @@ def main(cache_dir,output_dir):
         "far"
     )
 
-
     proser_bias= fit_proser_bias(
         proser_val["logits"]
     )
-
 
     placeholder_val= proser_placeholder_score(
         proser_val["logits"],
@@ -304,14 +336,27 @@ def main(cache_dir,output_dir):
         bias=proser_bias
     )
 
+    val_acceptance= (
+        placeholder_val <= 0
+    ).float().mean().item()
 
-    proser_placeholder_results= evaluate_score(
-        numpy_scores(placeholder_val),
-        numpy_scores(placeholder_test),
-        numpy_scores(placeholder_near),
-        numpy_scores(placeholder_far)
+    print(
+        "PROSER placeholder validation acceptance:",
+        val_acceptance
     )
 
+    proser_placeholder_results= evaluate_fixed_threshold(
+        numpy_scores(
+            placeholder_test
+        ),
+        numpy_scores(
+            placeholder_near
+        ),
+        numpy_scores(
+            placeholder_far
+        ),
+        threshold=0.0
+    )
 
     proser_placeholder_results[
         "closed_set_accuracy"
@@ -321,6 +366,11 @@ def main(cache_dir,output_dir):
         )
     )
 
+    proser_placeholder_results[
+        "validation_acceptance"
+    ]= float(
+        val_acceptance
+    )
 
     proser_placeholder_results[
         "calibration_bias"
@@ -328,6 +378,12 @@ def main(cache_dir,output_dir):
         proser_bias
     )
 
+    proser_placeholder_results[
+        "per_class_accuracy"
+    ]= per_class_accuracy(
+        proser_test["logits"],
+        proser_test["labels"]
+    )
 
     model_results[
         "proser_placeholder"
@@ -335,14 +391,12 @@ def main(cache_dir,output_dir):
 
 
     # =====================================
-    # EXTRA CLASS-LEVEL ANALYSIS
-    # vanilla MLS
+    # VANILLA MLS CLASS-LEVEL ANALYSIS
     # =====================================
 
     vanilla_mls_threshold= vanilla_results[
         "mls"
     ]["threshold"]
-
 
     near_mls_tensor= mls_score(
         vanilla_near["logits"]
@@ -352,7 +406,6 @@ def main(cache_dir,output_dir):
         vanilla_far["logits"]
     )
 
-
     per_class_near= per_unknown_class_analysis(
         vanilla_near["logits"],
         vanilla_near["labels"],
@@ -360,7 +413,6 @@ def main(cache_dir,output_dir):
         vanilla_mls_threshold,
         cifar100_classes
     )
-
 
     per_class_far= per_unknown_class_analysis(
         vanilla_far["logits"],
@@ -384,7 +436,6 @@ def main(cache_dir,output_dir):
         n=10
     )
 
-
     far_failures= accepted_failures(
         vanilla_far["logits"],
         vanilla_far["labels"],
@@ -401,9 +452,10 @@ def main(cache_dir,output_dir):
 
     score_summary= {}
 
-
     for score_name,score_function in score_functions.items():
-        score_summary[score_name]= {}
+        score_summary[
+            score_name
+        ]= {}
 
         for split_name,data in [
             ("known",vanilla_test),
@@ -442,7 +494,7 @@ def main(cache_dir,output_dir):
 
 
     # =====================================
-    # SAVE EVERYTHING
+    # SAVE RESULTS
     # =====================================
 
     final_results= {
@@ -468,12 +520,10 @@ def main(cache_dir,output_dir):
             score_summary
     }
 
-
     output_path= os.path.join(
         output_dir,
         "task4_results.json"
     )
-
 
     with open(output_path,"w") as f:
         json.dump(
@@ -481,7 +531,6 @@ def main(cache_dir,output_dir):
             f,
             indent=2
         )
-
 
     print(
         json.dumps(
