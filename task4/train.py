@@ -5,11 +5,13 @@ import argparse
 import numpy as np
 import torch
 import torch.nn as nn
+
 from task4.data.cifar10 import cifar10_loaders
 from task4.models.resnet_cifar import CIFARResNet18
 
 
 SEED= 6304
+
 
 def set_seed():
     random.seed(SEED)
@@ -53,7 +55,11 @@ def train_vanilla(data_root,split_path,output_dir):
     device= torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:",device)
 
-    train_loader,val_loader,test_loader= cifar10_loaders(data_root=data_root,split_path=split_path,method="vanilla")
+    train_loader,val_loader,test_loader= cifar10_loaders(
+        data_root=data_root,
+        split_path=split_path,
+        method="vanilla"
+    )
 
     print("Train:",len(train_loader.dataset))
     print("Val:",len(val_loader.dataset))
@@ -70,17 +76,41 @@ def train_vanilla(data_root,split_path,output_dir):
         weight_decay=5e-4
     )
 
-    scheduler= torch.optim.lr_scheduler.CosineAnnealingLR(optimizer,T_max=100)
+    scheduler= torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer,
+        T_max=100
+    )
 
     os.makedirs(output_dir,exist_ok=True)
 
     checkpoint_path= os.path.join(output_dir,"vanilla_best.pt")
+    latest_checkpoint_path= os.path.join(output_dir,"vanilla_latest.pt")
     history_path= os.path.join(output_dir,"vanilla_history.json")
 
     best_val_acc= 0
     history= []
+    start_epoch= 1
 
-    for epoch in range(1,101):
+    if os.path.exists(latest_checkpoint_path):
+        print("Found latest checkpoint. Resuming training...")
+
+        checkpoint= torch.load(latest_checkpoint_path,map_location=device)
+
+        model.load_state_dict(checkpoint["model_state_dict"])
+        optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
+        best_val_acc= checkpoint["best_val_acc"]
+        start_epoch= checkpoint["epoch"] + 1
+
+        if os.path.exists(history_path):
+            with open(history_path,"r") as f:
+                history= json.load(f)
+
+        print("Resuming from epoch:",start_epoch)
+        print("Best validation accuracy so far:",best_val_acc)
+
+    for epoch in range(start_epoch,101):
         model.train()
 
         running_loss= 0
@@ -143,6 +173,14 @@ def train_vanilla(data_root,split_path,output_dir):
             print("Saved new best checkpoint.")
 
         scheduler.step()
+
+        torch.save({
+            "epoch": epoch,
+            "model_state_dict": model.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "scheduler_state_dict": scheduler.state_dict(),
+            "best_val_acc": best_val_acc
+        },latest_checkpoint_path)
 
         with open(history_path,"w") as f:
             json.dump(history,f,indent=2)
