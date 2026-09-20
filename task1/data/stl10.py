@@ -1,62 +1,67 @@
 import json
 import numpy as np
-from torch.utils.data import Dataset,DataLoader
+from torch.utils.data import Dataset
 from torchvision.datasets import STL10
-from torchvision import transforms
 
-SEED= 6304
-
-IMAGENET_NORMALIZE= transforms.Normalize(
-    mean=[0.485,0.456,0.406],
-    std=[0.229,0.224,0.225]
-)
-
-CLIP_NORMALIZE= transforms.Normalize(
-    mean=[0.48145466,0.4578275,0.40821073],
-    std=[0.26862954,0.26130258,0.27577711]
-)
+SEED = 6304
 
 
-def load_stl10(data_root,download=False):
-    train_dataset= STL10(root=data_root,split="train",download=download,transform=None)
-    test_dataset= STL10(root=data_root,split="test",download=download,transform=None)
-    return train_dataset,test_dataset
+def load_stl10(root, download=False):
+    train = STL10(root=root, split="train", download=download, transform=None)
+    test = STL10(root=root, split="test", download=download, transform=None)
+    return train, test
 
 
-def load_split(split_path):
-    with open(split_path,"r") as f:
-        split= json.load(f)
+def make_split(train_dataset, test_dataset, seed=SEED, test_per_class=50):
+    from sklearn.model_selection import train_test_split
 
-    return (
-        np.array(split["train_idx"]),
-        np.array(split["val_idx"]),
-        np.array(split["test_subset_idx"])
+    train_labels = np.array(train_dataset.labels)
+    train_idx, val_idx = train_test_split(
+        np.arange(len(train_dataset)),
+        test_size=0.2,
+        stratify=train_labels,
+        random_state=seed,
     )
 
+    test_labels = np.array(test_dataset.labels)
+    rng = np.random.default_rng(seed)
+    selected_test_idx = []
 
-class IndexedSTL10(Dataset):
-    def __init__(self,base_dataset,indices,normalize):
-        self.base_dataset= base_dataset
-        self.indices= np.asarray(indices)
-        self.normalize= normalize
+    for class_id in range(10):
+        class_idx = np.where(test_labels == class_id)[0]
+        n = min(test_per_class, len(class_idx))
+        selected_test_idx.extend(rng.choice(class_idx, size=n, replace=False))
+
+    return {
+        "train_idx": np.asarray(train_idx).tolist(),
+        "val_idx": np.asarray(val_idx).tolist(),
+        "test_subset_idx": np.asarray(selected_test_idx).tolist(),
+    }
+
+
+def save_split(split, path):
+    with open(path, "w") as f:
+        json.dump(split, f, indent=2)
+
+
+def load_split(path):
+    with open(path, "r") as f:
+        return json.load(f)
+
+
+class IndexedTransformDataset(Dataset):
+    def __init__(self, base_dataset, indices, image_transform, normalize):
+        self.base_dataset = base_dataset
+        self.indices = list(indices)
+        self.image_transform = image_transform
+        self.normalize = normalize
 
     def __len__(self):
         return len(self.indices)
 
-    def __getitem__(self,i):
-        dataset_idx= int(self.indices[i])
-        image,label= self.base_dataset[dataset_idx]
-        image= transforms.functional.resize(image,[224,224])
-        image= transforms.functional.to_tensor(image)
-        image= self.normalize(image)
-        return image,label
-
-
-def make_test_loaders(test_dataset,test_indices,batch_size=64,num_workers=2):
-    imagenet_dataset= IndexedSTL10(test_dataset,test_indices,IMAGENET_NORMALIZE)
-    clip_dataset= IndexedSTL10(test_dataset,test_indices,CLIP_NORMALIZE)
-
-    imagenet_loader= DataLoader(imagenet_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
-    clip_loader= DataLoader(clip_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
-
-    return imagenet_loader,clip_loader
+    def __getitem__(self, i):
+        idx = self.indices[i]
+        image, label = self.base_dataset[idx]
+        image = self.image_transform(image)
+        image = self.normalize(image)
+        return image, label

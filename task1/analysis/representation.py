@@ -1,44 +1,37 @@
-import os
 import numpy as np
-import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
-SEED= 6304
 
-
-def fit_tsne(clean_features,transformed_features,perplexity=30,seed=SEED):
-    clean= clean_features.float().cpu().numpy()
-    transformed= transformed_features.float().cpu().numpy()
-    combined= np.concatenate([clean,transformed],axis=0)
-
-    tsne= TSNE(
+def joint_tsne(clean_features, transformed_features, seed=6304,
+               perplexity=30, learning_rate="auto", init="pca"):
+    combined = np.concatenate([clean_features, transformed_features], axis=0)
+    projector = TSNE(
         n_components=2,
-        perplexity=perplexity,
         random_state=seed,
-        init="pca",
-        learning_rate="auto"
+        perplexity=perplexity,
+        learning_rate=learning_rate,
+        init=init,
     )
+    coords = projector.fit_transform(combined)
+    n = len(clean_features)
+    return coords[:n], coords[n:]
 
-    projected= tsne.fit_transform(combined)
-    n= len(clean)
-    return projected[:n],projected[n:]
 
+def joint_umap(clean_features, transformed_features, seed=6304,
+               n_neighbors=15, min_dist=0.1, metric="cosine"):
+    try:
+        import umap
+    except ImportError as e:
+        raise ImportError("Install UMAP with: pip install umap-learn") from e
 
-def plot_clean_vs_transformed(clean_2d,transformed_2d,labels,title,output_path):
-    labels= np.asarray(labels)
-
-    plt.figure(figsize=(7,6))
-
-    for class_id in np.unique(labels):
-        mask= labels == class_id
-        plt.scatter(clean_2d[mask,0],clean_2d[mask,1],s=16,alpha=0.55,label=f"Class {class_id} clean")
-        plt.scatter(transformed_2d[mask,0],transformed_2d[mask,1],s=16,alpha=0.55,marker="x",label=f"Class {class_id} transformed")
-
-    plt.title(title)
-    plt.xlabel("t-SNE 1")
-    plt.ylabel("t-SNE 2")
-    plt.tight_layout()
-
-    os.makedirs(os.path.dirname(output_path),exist_ok=True)
-    plt.savefig(output_path,dpi=300,bbox_inches="tight")
-    plt.close()
+    combined = np.concatenate([clean_features, transformed_features], axis=0)
+    projector = umap.UMAP(
+        n_components=2,
+        random_state=seed,
+        n_neighbors=n_neighbors,
+        min_dist=min_dist,
+        metric=metric,
+    )
+    coords = projector.fit_transform(combined)
+    n = len(clean_features)
+    return coords[:n], coords[n:]

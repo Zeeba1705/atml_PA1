@@ -2,18 +2,21 @@ import torch
 import torch.nn.functional as F
 
 
-def cosine_stability(clean_features,transformed_features):
-    if clean_features.shape != transformed_features.shape:
-        raise ValueError("Clean and transformed features must have the same shape.")
+def extract_features(model, loader, device, is_clip=False):
+    feats, labels = [], []
+    model.eval()
+    with torch.no_grad():
+        for images, y in loader:
+            images = images.to(device)
+            if is_clip:
+                x = model.encode_image(images)
+                x = x / x.norm(dim=-1, keepdim=True)
+            else:
+                x = model(images)
+            feats.append(x.cpu())
+            labels.append(y.cpu())
+    return torch.cat(feats), torch.cat(labels)
 
-    similarities= F.cosine_similarity(
-        clean_features.float(),
-        transformed_features.float(),
-        dim=1
-    )
 
-    return {
-        "mean":similarities.mean().item(),
-        "std":similarities.std(unbiased=False).item(),
-        "per_example":similarities
-    }
+def cosine_stability(clean_feats, changed_feats):
+    return float(F.cosine_similarity(clean_feats, changed_feats, dim=1).mean().item())
