@@ -49,16 +49,17 @@ def evaluate(model,loader,device):
     return avg_loss,accuracy
 
 
-def train_vanilla(data_root,split_path,output_dir):
+def train_model(method,data_root,split_path,output_dir):
     set_seed()
 
     device= torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Device:",device)
+    print("Method:",method)
 
     train_loader,val_loader,test_loader= cifar10_loaders(
         data_root=data_root,
         split_path=split_path,
-        method="vanilla"
+        method=method
     )
 
     print("Train:",len(train_loader.dataset))
@@ -83,9 +84,10 @@ def train_vanilla(data_root,split_path,output_dir):
 
     os.makedirs(output_dir,exist_ok=True)
 
-    checkpoint_path= os.path.join(output_dir,"vanilla_best.pt")
-    latest_checkpoint_path= os.path.join(output_dir,"vanilla_latest.pt")
-    history_path= os.path.join(output_dir,"vanilla_history.json")
+    checkpoint_path= os.path.join(output_dir,f"{method}_best.pt")
+    latest_checkpoint_path= os.path.join(output_dir,f"{method}_latest.pt")
+    history_path= os.path.join(output_dir,f"{method}_history.json")
+    results_path= os.path.join(output_dir,f"{method}_results.json")
 
     best_val_acc= 0
     history= []
@@ -196,26 +198,45 @@ def train_vanilla(data_root,split_path,output_dir):
     print("CIFAR-10 test accuracy:",test_acc)
 
     final_results= {
+        "method": method,
         "best_epoch": checkpoint["epoch"],
         "best_val_acc": checkpoint["val_acc"],
         "test_loss": test_loss,
         "test_acc": test_acc
     }
 
-    with open(os.path.join(output_dir,"vanilla_results.json"),"w") as f:
+    with open(results_path,"w") as f:
         json.dump(final_results,f,indent=2)
 
 
 if __name__ == "__main__":
     parser= argparse.ArgumentParser()
 
-    parser.add_argument("--data_root",default="/content/data")
-    parser.add_argument("--split_path",default="/content/atml_PA1/splits/cifar10_seed6304.json")
-    parser.add_argument("--output_dir",default="/content/drive/MyDrive/atml_PA1/task4_results")
+    parser.add_argument(
+        "--method",
+        choices=["vanilla","gcsc"],
+        required=True
+    )
+
+    parser.add_argument(
+        "--data_root",
+        default="/content/data"
+    )
+
+    parser.add_argument(
+        "--split_path",
+        default="/content/atml_PA1/splits/cifar10_seed6304.json"
+    )
+
+    parser.add_argument(
+        "--output_dir",
+        default="/content/drive/MyDrive/atml_PA1/task4_results"
+    )
 
     args= parser.parse_args()
 
-    train_vanilla(
+    train_model(
+        method=args.method,
         data_root=args.data_root,
         split_path=args.split_path,
         output_dir=args.output_dir
