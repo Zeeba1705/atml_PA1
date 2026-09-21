@@ -1,0 +1,7 @@
+{
+  "method": "gcsc",
+  "best_epoch": 94,
+  "best_val_acc": 0.9556,
+  "test_loss": 0.17172843475341798,
+  "test_acc": 0.9518
+}
