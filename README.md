@@ -12,13 +12,16 @@ This repository contains the code and experiment outputs for Programming Assignm
 ## Repository Structure
 
 ```text
-├── common/              # shared utilities
+├── common/              
+├── report/              
+├── shared/            
+├── splits/              
 ├── task1/               # inductive biases and representation analysis
 ├── task2/               # domain adaptation
 ├── task3/               # domain generalization
 ├── task4/               # open-set recognition
-├── results/             # small machine-readable result files, if shared globally
-├── figures/             # report figures, if shared globally
+├── results/             
+├── figures/             
 ├── requirements.txt
 ├── .gitignore
 └── README.md
